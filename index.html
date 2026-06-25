@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B站UP稿件播放量查询 · 低播标记 + 投流申请导出</title>
+<style>
+  :root{--bg:#fff;--fg:#18191c;--sub:#61666d;--brand:#00aeec;--pink:#fb7299;--line:#e3e5e7;--soft:#f6f7f8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--soft);color:var(--fg);line-height:1.6}
+  .wrap{max-width:880px;margin:0 auto;padding:24px 16px 60px}
+  h1{font-size:22px;margin:6px 0 2px}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+  .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  label{font-size:13px;color:var(--sub)}
+  input{border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;outline:none}
+  input:focus{border-color:var(--brand)}
+  .btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:15px;font-weight:600;cursor:pointer}
+  .btn:active{opacity:.85}
+  .btn.copy{background:var(--pink)}
+  .stat{font-size:14px;margin:12px 0 8px}
+  .stat b{color:var(--pink)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{border:1px solid #eee;padding:7px 9px;text-align:left}
+  th{background:var(--soft);color:var(--sub);font-weight:600}
+  tr.low{background:#fff3f0}
+  td.play{text-align:right;font-variant-numeric:tabular-nums}
+  .err{color:#e54545;font-size:13px;margin-top:8px}
+  .out{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:12px;font-family:ui-monospace,Menlo,monospace;background:var(--soft);white-space:pre;overflow:auto;margin-top:10px}
+  .foot{text-align:center;color:var(--sub);font-size:12px;margin-top:24px}
+  .foot a{color:var(--sub)}
+  .cfg{font-size:12px;color:var(--sub);cursor:pointer;text-decoration:underline}
+  .toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#18191c;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📊 B站 UP 稿件播放量查询</h1>
+  <div class="sub">输入任意 UP 的 UID，查 TA 近 N 条稿件播放量，自动标记低于均值的低播稿件，一键导出「投流申请」表格。无需登录，人人可用。</div>
+
+  <div class="card">
+    <div class="row">
+      <label>UID</label>
+      <input id="uid" style="width:160px" placeholder="如 1202350411">
+      <label>近</label>
+      <input id="n" style="width:56px" value="10">
+      <label>条</label>
+      <button class="btn" id="go">查询</button>
+    </div>
+    <div style="margin-top:8px"><span class="cfg" id="cfgBtn">⚙️ 设置中转地址</span></div>
+    <div class="row hide" id="cfgRow" style="margin-top:8px">
+      <input id="api" style="flex:1;min-width:240px" placeholder="https://你的Worker.workers.dev">
+      <button class="btn" id="saveApi" style="padding:8px 14px;font-size:13px">保存</button>
+    </div>
+  </div>
+
+  <div class="card hide" id="resultCard">
+    <div class="stat" id="stat"></div>
+    <div id="table"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn copy" id="copy">📋 复制低播稿件「投流申请」（TSV，可粘进飞书多维表格）</button>
+    </div>
+    <div class="out hide" id="tsv"></div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="foot">
+    公开数据查询 · 不收集任何信息 · MIT License ·
+    <a href="https://github.com/hiamberhuang/bili-up-monitor" target="_blank">源码</a>
+  </div>
+</div>
+<div class="toast" id="toast">已复制</div>
+
+<script>
+  // 中转地址：部署 Worker 后把下面这行换成你的 Worker 网址；也可点页面「设置中转地址」临时填（存本地）
+  const DEFAULT_API = "PASTE_YOUR_WORKER_URL_HERE";
+  const $ = id => document.getElementById(id);
+  const getApi = () => (localStorage.getItem('bili_api') || DEFAULT_API).replace(/\/+$/,'');
+  const wan = v => (v/10000).toFixed(2) + '万';
+  const today = () => {const d=new Date();return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();};
+
+  // 设置中转地址
+  $('cfgBtn').onclick = () => $('cfgRow').classList.toggle('hide');
+  $('api').value = localStorage.getItem('bili_api') || '';
+  $('saveApi').onclick = () => {
+    const v = $('api').value.trim();
+    if(v){ localStorage.setItem('bili_api', v); toast('中转地址已保存'); $('cfgRow').classList.add('hide'); }
+  };
+
+  let lastTSV = '';
+  $('go').onclick = run;
+  $('uid').addEventListener('keydown', e => { if(e.key==='Enter') run(); });
+
+  async function run(){
+    const mid = $('uid').value.trim().replace(/\D/g,'');
+    const n = Math.max(1, Math.min(30, parseInt($('n').value)||10));
+    $('err').textContent=''; $('resultCard').classList.add('hide');
+    if(!mid){ $('err').textContent='请输入 UID'; return; }
+    const api = getApi();
+    if(!api || api.includes('PASTE_YOUR')){ $('err').textContent='还没设置中转地址，点上方「⚙️ 设置中转地址」填入你的 Worker 网址'; return; }
+    $('go').textContent='查询中…'; $('go').disabled=true;
+    try{
+      const r = await fetch(`${api}/?mid=${mid}&n=${n}`);
+      const d = await r.json();
+      if(d.error){ $('err').textContent = d.error + (d.code===-799?'（被限频，等几秒重试）':''); return; }
+      render(mid, n, d);
+    }catch(e){ $('err').textContent='请求失败：'+e.message+'（检查中转地址是否正确、Worker 是否已部署）'; }
+    finally{ $('go').textContent='查询'; $('go').disabled=false; }
+  }
+
+  function render(mid, n, d){
+    const list = d.list || [];
+    if(!list.length){ $('err').textContent='该 UP 没有公开稿件'; return; }
+    const avg = Math.round(list.reduce((a,v)=>a+v.play,0)/list.length);
+    const low = list.filter(v=>v.play<avg);
+    $('stat').innerHTML = `<b>${d.name||''}</b>（UID ${mid}）近 ${list.length} 条均值 <b>${wan(avg)}</b>，低于均值 <b>${low.length}</b> 条`;
+    let html = '<table><thead><tr><th>稿件</th><th>播放</th><th>低播</th></tr></thead><tbody>';
+    list.forEach(v=>{
+      const isLow = v.play<avg;
+      html += `<tr class="${isLow?'low':''}"><td><a href="https://www.bilibili.com/video/${v.bvid}" target="_blank">${esc(v.title)}</a></td><td class="play">${wan(v.play)}</td><td>${isLow?'⚠️':''}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    $('table').innerHTML = html;
+    // 投流申请 TSV（对齐飞书表头）
+    const head = ['提需日期','提需人','uid','昵称','投流稿件','申请原因','投流渠道','投流预算','备注','是否已投'];
+    const rows = low.map(v=>[today(),'',mid,d.name||'',v.bvid,`低播：本稿${wan(v.play)} < 近${list.length}条均值${wan(avg)}`,'','','','否']);
+    lastTSV = [head.join('\t'), ...rows.map(r=>r.join('\t'))].join('\n');
+    $('resultCard').classList.remove('hide');
+    $('copy').textContent = `📋 复制 ${low.length} 条低播稿件「投流申请」（TSV）`;
+  }
+
+  $('copy').onclick = async () => {
+    if(!lastTSV) return;
+    try{ await navigator.clipboard.writeText(lastTSV); }catch(e){ $('tsv').textContent=lastTSV; $('tsv').classList.remove('hide'); }
+    toast('已复制，去飞书多维表格粘贴');
+  };
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1500);}
+</script>
+</body>
+</html>
