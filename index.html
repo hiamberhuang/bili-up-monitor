@@ -3,143 +3,204 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>B站UP稿件播放量查询 · 低播标记 + 投流申请导出</title>
+<title>B站签约作者监控 · 日常监控 + 投流提报</title>
 <style>
   :root{--bg:#fff;--fg:#18191c;--sub:#61666d;--brand:#00aeec;--pink:#fb7299;--line:#e3e5e7;--soft:#f6f7f8}
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--soft);color:var(--fg);line-height:1.6}
-  .wrap{max-width:880px;margin:0 auto;padding:24px 16px 60px}
-  h1{font-size:22px;margin:6px 0 2px}
-  .sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+  .wrap{max-width:920px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:20px;margin:6px 0 2px}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:14px}
+  .tabs{display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+  .tab{padding:9px 16px;font-size:14px;font-weight:600;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.on{color:var(--brand);border-bottom-color:var(--brand)}
   .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   label{font-size:13px;color:var(--sub)}
   input{border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;outline:none}
   input:focus{border-color:var(--brand)}
-  .btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:15px;font-weight:600;cursor:pointer}
-  .btn:active{opacity:.85}
+  .btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn:active{opacity:.85}.btn:disabled{opacity:.5}
   .btn.copy{background:var(--pink)}
-  .stat{font-size:14px;margin:12px 0 8px}
-  .stat b{color:var(--pink)}
-  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
-  th,td{border:1px solid #eee;padding:7px 9px;text-align:left}
+  .stat{font-size:14px;margin:12px 0 8px}.stat b{color:var(--pink)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  th,td{border:1px solid #eee;padding:6px 8px;text-align:left;vertical-align:top}
   th{background:var(--soft);color:var(--sub);font-weight:600}
   tr.low{background:#fff3f0}
   td.play{text-align:right;font-variant-numeric:tabular-nums}
   .err{color:#e54545;font-size:13px;margin-top:8px}
-  .out{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:12px;font-family:ui-monospace,Menlo,monospace;background:var(--soft);white-space:pre;overflow:auto;margin-top:10px}
-  .foot{text-align:center;color:var(--sub);font-size:12px;margin-top:24px}
-  .foot a{color:var(--sub)}
-  .cfg{font-size:12px;color:var(--sub);cursor:pointer;text-decoration:underline}
+  .out{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11.5px;font-family:ui-monospace,Menlo,monospace;background:var(--soft);white-space:pre;overflow:auto;margin-top:10px}
+  .hide{display:none}.cfg{font-size:12px;color:var(--sub);cursor:pointer;text-decoration:underline}
+  .foot{text-align:center;color:var(--sub);font-size:12px;margin-top:24px}.foot a{color:var(--sub)}
+  .prog{font-size:12px;color:var(--sub);margin-top:6px}
   .toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#18191c;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;transition:.25s;pointer-events:none}
   .toast.show{opacity:1}
-  .hide{display:none}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>📊 B站 UP 稿件播放量查询</h1>
-  <div class="sub">输入任意 UP 的 UID，查 TA 近 N 条稿件播放量，自动标记低于均值的低播稿件，一键导出「投流申请」表格。无需登录，人人可用。</div>
+  <h1>📊 B站签约作者监控</h1>
+  <div class="sub">无需登录 · 数据由 wbi 签名公开接口经中转抓取 · 纯前端不存任何数据</div>
 
-  <div class="card">
-    <div class="row">
-      <label>UID</label>
-      <input id="uid" style="width:160px" placeholder="如 1202350411">
-      <label>近</label>
-      <input id="n" style="width:56px" value="10">
-      <label>条</label>
-      <button class="btn" id="go">查询</button>
-    </div>
-    <div style="margin-top:8px"><span class="cfg" id="cfgBtn">⚙️ 设置中转地址</span></div>
-    <div class="row hide" id="cfgRow" style="margin-top:8px">
-      <input id="api" style="flex:1;min-width:240px" placeholder="https://你的Worker.workers.dev">
-      <button class="btn" id="saveApi" style="padding:8px 14px;font-size:13px">保存</button>
-    </div>
+  <div class="tabs">
+    <div class="tab on" data-tab="daily">📈 日常监控</div>
+    <div class="tab" data-tab="report">📋 投流提报（每周低播）</div>
   </div>
 
-  <div class="card hide" id="resultCard">
-    <div class="stat" id="stat"></div>
-    <div id="table"></div>
-    <div class="row" style="margin-top:12px">
-      <button class="btn copy" id="copy">📋 复制低播稿件「投流申请」（TSV，可粘进飞书多维表格）</button>
+  <!-- ===== 页1：日常监控 ===== -->
+  <div id="page-daily">
+    <div class="card">
+      <div class="row">
+        <label>UID</label>
+        <input id="uid" style="width:160px" placeholder="如 1202350411">
+        <label>近</label><input id="n" style="width:56px" value="10"><label>条</label>
+        <button class="btn" id="go">查询</button>
+      </div>
+      <div style="margin-top:8px"><span class="cfg" id="cfgBtn">⚙️ 设置中转地址</span></div>
+      <div class="row hide" id="cfgRow" style="margin-top:8px">
+        <input id="api" style="flex:1;min-width:240px" placeholder="https://你的Worker.workers.dev">
+        <button class="btn" id="saveApi" style="padding:8px 14px;font-size:13px">保存</button>
+      </div>
     </div>
-    <div class="out hide" id="tsv"></div>
+    <div class="card hide" id="dailyResult">
+      <div class="stat" id="dStat"></div>
+      <div id="dTable"></div>
+    </div>
+    <div class="err" id="dErr"></div>
   </div>
 
-  <div class="err" id="err"></div>
-
-  <div class="foot">
-    公开数据查询 · 不收集任何信息 · MIT License ·
-    <a href="https://github.com/hiamberhuang/bili-up-monitor" target="_blank">源码</a>
+  <!-- ===== 页2：投流提报 ===== -->
+  <div id="page-report" class="hide">
+    <div class="card">
+      <div class="row">
+        <button class="btn" id="run">抓取本周低播稿件</button>
+        <span class="prog" id="rProg"></span>
+      </div>
+      <div class="sub" style="margin-top:8px">扫描全部签约作者，窗口 = 上一个完整周（周日→周日），挑出低于该作者近 N 条均值的稿件，按投流申请表格式导出。</div>
+    </div>
+    <div class="card hide" id="reportResult">
+      <div class="stat" id="rStat"></div>
+      <div class="row" style="margin:10px 0"><button class="btn copy" id="rCopy">📋 复制全部（TSV，粘进多维表格）</button></div>
+      <div id="rTable"></div>
+      <div class="out hide" id="rTsv"></div>
+    </div>
+    <div class="err" id="rErr"></div>
   </div>
+
+  <div class="foot">公开数据查询 · MIT · <a href="https://github.com/hiamberhuang/bili-up-monitor" target="_blank">源码</a></div>
 </div>
 <div class="toast" id="toast">已复制</div>
 
 <script>
-  // 中转地址：部署 Worker 后把下面这行换成你的 Worker 网址；也可点页面「设置中转地址」临时填（存本地）
+  // 中转地址：部署 Worker 后改这行，或点页面「设置中转地址」临时填
   const DEFAULT_API = "PASTE_YOUR_WORKER_URL_HERE";
+  // 签约作者名册（新增/调整在此处改）
+  const SIGNED = [
+    {name:"转生成为毛毛", uid:"1563385862", tier:"头部"},
+    {name:"君在西安",     uid:"1202350411", tier:"头部"},
+    {name:"肉仔肉仔肉",   uid:"3493116935932108", tier:"高潜"},
+    {name:"大霸子来了",   uid:"141248", tier:"高潜"},
+    {name:"氪金小Case",   uid:"1853931340", tier:"高潜"},
+    {name:"二少爷的拍拍拍", uid:"1604051466", tier:"高潜"},
+    {name:"喂食猫大土豆", uid:"1384630488", tier:"高潜"},
+    {name:"有米荷包蛋",   uid:"299736460", tier:"高潜"},
+  ];
+  const REQUESTER = "加七", N = 10;
+
   const $ = id => document.getElementById(id);
   const getApi = () => (localStorage.getItem('bili_api') || DEFAULT_API).replace(/\/+$/,'');
-  const wan = v => (v/10000).toFixed(2) + '万';
-  const today = () => {const d=new Date();return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();};
-
-  // 设置中转地址
-  $('cfgBtn').onclick = () => $('cfgRow').classList.toggle('hide');
-  $('api').value = localStorage.getItem('bili_api') || '';
-  $('saveApi').onclick = () => {
-    const v = $('api').value.trim();
-    if(v){ localStorage.setItem('bili_api', v); toast('中转地址已保存'); $('cfgRow').classList.add('hide'); }
-  };
-
-  let lastTSV = '';
-  $('go').onclick = run;
-  $('uid').addEventListener('keydown', e => { if(e.key==='Enter') run(); });
-
-  async function run(){
-    const mid = $('uid').value.trim().replace(/\D/g,'');
-    const n = Math.max(1, Math.min(30, parseInt($('n').value)||10));
-    $('err').textContent=''; $('resultCard').classList.add('hide');
-    if(!mid){ $('err').textContent='请输入 UID'; return; }
-    const api = getApi();
-    if(!api || api.includes('PASTE_YOUR')){ $('err').textContent='还没设置中转地址，点上方「⚙️ 设置中转地址」填入你的 Worker 网址'; return; }
-    $('go').textContent='查询中…'; $('go').disabled=true;
-    try{
-      const r = await fetch(`${api}/?mid=${mid}&n=${n}`);
-      const d = await r.json();
-      if(d.error){ $('err').textContent = d.error + (d.code===-799?'（被限频，等几秒重试）':''); return; }
-      render(mid, n, d);
-    }catch(e){ $('err').textContent='请求失败：'+e.message+'（检查中转地址是否正确、Worker 是否已部署）'; }
-    finally{ $('go').textContent='查询'; $('go').disabled=false; }
-  }
-
-  function render(mid, n, d){
-    const list = d.list || [];
-    if(!list.length){ $('err').textContent='该 UP 没有公开稿件'; return; }
-    const avg = Math.round(list.reduce((a,v)=>a+v.play,0)/list.length);
-    const low = list.filter(v=>v.play<avg);
-    $('stat').innerHTML = `<b>${d.name||''}</b>（UID ${mid}）近 ${list.length} 条均值 <b>${wan(avg)}</b>，低于均值 <b>${low.length}</b> 条`;
-    let html = '<table><thead><tr><th>稿件</th><th>播放</th><th>低播</th></tr></thead><tbody>';
-    list.forEach(v=>{
-      const isLow = v.play<avg;
-      html += `<tr class="${isLow?'low':''}"><td><a href="https://www.bilibili.com/video/${v.bvid}" target="_blank">${esc(v.title)}</a></td><td class="play">${wan(v.play)}</td><td>${isLow?'⚠️':''}</td></tr>`;
-    });
-    html += '</tbody></table>';
-    $('table').innerHTML = html;
-    // 投流申请 TSV（对齐飞书表头）
-    const head = ['提需日期','提需人','uid','昵称','投流稿件','申请原因','投流渠道','投流预算','备注','是否已投'];
-    const rows = low.map(v=>[today(),'',mid,d.name||'',v.bvid,`低播：本稿${wan(v.play)} < 近${list.length}条均值${wan(avg)}`,'','','','否']);
-    lastTSV = [head.join('\t'), ...rows.map(r=>r.join('\t'))].join('\n');
-    $('resultCard').classList.remove('hide');
-    $('copy').textContent = `📋 复制 ${low.length} 条低播稿件「投流申请」（TSV）`;
-  }
-
-  $('copy').onclick = async () => {
-    if(!lastTSV) return;
-    try{ await navigator.clipboard.writeText(lastTSV); }catch(e){ $('tsv').textContent=lastTSV; $('tsv').classList.remove('hide'); }
-    toast('已复制，去飞书多维表格粘贴');
-  };
-  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  const wan = v => (v/10000).toFixed(2)+'万';
+  const comma = v => v.toLocaleString('en-US');
+  const sleep = ms => new Promise(r=>setTimeout(r,ms));
+  const fmtSlash = d => `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
   function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1500);}
+  function apiReady(){const a=getApi();return a && !a.includes('PASTE_YOUR');}
+
+  // tabs
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
+    $('page-daily').classList.toggle('hide', t.dataset.tab!=='daily');
+    $('page-report').classList.toggle('hide', t.dataset.tab!=='report');
+  });
+  // 设置中转
+  $('cfgBtn').onclick=()=>$('cfgRow').classList.toggle('hide');
+  $('api').value=localStorage.getItem('bili_api')||'';
+  $('saveApi').onclick=()=>{const v=$('api').value.trim();if(v){localStorage.setItem('bili_api',v);toast('已保存');$('cfgRow').classList.add('hide');}};
+
+  async function fetchUp(uid,n){
+    const r=await fetch(`${getApi()}/?mid=${uid}&n=${n}`);
+    return r.json();
+  }
+
+  /* ---- 页1：日常监控 ---- */
+  $('go').onclick=runDaily;
+  $('uid').addEventListener('keydown',e=>{if(e.key==='Enter')runDaily();});
+  async function runDaily(){
+    const mid=$('uid').value.trim().replace(/\D/g,'');
+    const n=Math.max(1,Math.min(30,parseInt($('n').value)||10));
+    $('dErr').textContent='';$('dailyResult').classList.add('hide');
+    if(!mid){$('dErr').textContent='请输入 UID';return;}
+    if(!apiReady()){$('dErr').textContent='先点「⚙️ 设置中转地址」填入 Worker 网址';return;}
+    $('go').textContent='查询中…';$('go').disabled=true;
+    try{
+      const d=await fetchUp(mid,n);
+      if(d.error){$('dErr').textContent=d.error;return;}
+      const list=d.list||[];if(!list.length){$('dErr').textContent='无公开稿件';return;}
+      const avg=Math.round(list.reduce((a,v)=>a+v.play,0)/list.length);
+      const low=list.filter(v=>v.play<avg);
+      $('dStat').innerHTML=`<b>${esc(d.name||'')}</b>（UID ${mid}）近 ${list.length} 条均值 <b>${wan(avg)}</b>，低于均值 <b>${low.length}</b> 条`;
+      let h='<table><thead><tr><th>稿件</th><th>播放</th><th>低播</th></tr></thead><tbody>';
+      list.forEach(v=>{h+=`<tr class="${v.play<avg?'low':''}"><td><a href="https://www.bilibili.com/video/${v.bvid}" target="_blank">${esc(v.title)}</a></td><td class="play">${wan(v.play)}</td><td>${v.play<avg?'⚠️':''}</td></tr>`;});
+      $('dTable').innerHTML=h+'</tbody></table>';$('dailyResult').classList.remove('hide');
+    }catch(e){$('dErr').textContent='请求失败：'+e.message;}
+    finally{$('go').textContent='查询';$('go').disabled=false;}
+  }
+
+  /* ---- 页2：投流提报 ---- */
+  // 上一个完整周：上周日 → 本周日（含两端）
+  function weekWindow(){
+    const now=new Date();now.setHours(0,0,0,0);
+    const end=new Date(now);end.setDate(now.getDate()-now.getDay()); // 最近一个周日（今天若周日则今天）
+    const start=new Date(end);start.setDate(end.getDate()-7);        // 上一个周日
+    return {start,end};
+  }
+  let lastTSV='';
+  $('run').onclick=runReport;
+  async function runReport(){
+    $('rErr').textContent='';$('reportResult').classList.add('hide');
+    if(!apiReady()){$('rErr').textContent='先到「日常监控」页点「⚙️ 设置中转地址」填入 Worker 网址';return;}
+    const {start,end}=weekWindow();
+    const inWin=t=>{const d=new Date(t*1000);d.setHours(0,0,0,0);return d>=start&&d<=end;};
+    $('run').disabled=true;
+    const rows=[];const today=fmtSlash(new Date());
+    for(let i=0;i<SIGNED.length;i++){
+      const u=SIGNED[i];$('rProg').textContent=`抓取中 ${i+1}/${SIGNED.length}：${u.name}`;
+      try{
+        const d=await fetchUp(u.uid,N);
+        if(!d.error && d.list && d.list.length){
+          const avg=Math.round(d.list.reduce((a,v)=>a+v.play,0)/d.list.length);
+          d.list.filter(v=>inWin(v.created)&&v.play<avg).forEach(v=>{
+            rows.push([today,REQUESTER,u.uid,d.name||u.name,v.bvid,`当期播放量${comma(v.play)}，低于近${d.list.length}条均值${comma(avg)}`,'','','','否']);
+          });
+        }
+      }catch(e){/* 跳过单个失败 */}
+      await sleep(1500); // 防限频
+    }
+    $('rProg').textContent='';$('run').disabled=false;
+    const head=['提需日期','提需人','uid','昵称','投流稿件','申请原因','投流渠道','投流预算','备注','是否已投'];
+    lastTSV=[head.join('\t'),...rows.map(r=>r.join('\t'))].join('\n');
+    const ws=`${start.getMonth()+1}/${start.getDate()}`,we=`${end.getMonth()+1}/${end.getDate()}`;
+    $('rStat').innerHTML=`窗口 ${ws}→${we}（周日→周日），共 <b>${rows.length}</b> 条低播提报候选`;
+    let h='<table><thead><tr>'+head.map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>';
+    rows.forEach(r=>{h+='<tr>'+r.map((c,i)=>i===4?`<td><a href="https://www.bilibili.com/video/${c}" target="_blank">${c}</a></td>`:`<td>${esc(c)}</td>`).join('')+'</tr>';});
+    $('rTable').innerHTML=h+'</tbody></table>';$('reportResult').classList.remove('hide');
+  }
+  $('rCopy').onclick=async()=>{
+    if(!lastTSV)return;
+    try{await navigator.clipboard.writeText(lastTSV);}catch(e){$('rTsv').textContent=lastTSV;$('rTsv').classList.remove('hide');}
+    toast('已复制，去多维表格粘贴');
+  };
 </script>
 </body>
 </html>
