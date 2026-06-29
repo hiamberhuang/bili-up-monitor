@@ -15,13 +15,15 @@
   .tab{padding:9px 16px;font-size:14px;font-weight:600;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
   .tab.on{color:var(--brand);border-bottom-color:var(--brand)}
   .card{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:14px}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   label{font-size:13px;color:var(--sub)}
   input{border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:14px;font-family:inherit;outline:none}
   input:focus{border-color:var(--brand)}
   .btn{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer}
   .btn:active{opacity:.85}.btn:disabled{opacity:.5}
-  .btn.copy{background:var(--pink)}
+  .btn.copy{background:var(--pink)}.btn.sm{padding:6px 12px;font-size:13px}
+  .btn.ghost{background:#fff;color:var(--sub);border:1px solid var(--line)}
   .stat{font-size:14px;margin:12px 0 8px}.stat b{color:var(--pink)}
   table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
   th,td{border:1px solid #eee;padding:6px 8px;text-align:left;vertical-align:top}
@@ -33,6 +35,9 @@
   .hide{display:none}.cfg{font-size:12px;color:var(--sub);cursor:pointer;text-decoration:underline}
   .foot{text-align:center;color:var(--sub);font-size:12px;margin-top:24px}.foot a{color:var(--sub)}
   .prog{font-size:12px;color:var(--sub);margin-top:6px}
+  .roster{font-size:13px}.roster .ritem{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed #eee}
+  .roster .rn{flex:1}.roster .ru{color:var(--sub);width:160px}.tier{font-size:11px;color:#fff;background:#9aa0a6;border-radius:4px;padding:1px 6px}.tier.t1{background:#fb7299}
+  .del{color:#e54545;cursor:pointer;font-size:12px}
   .toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#18191c;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;transition:.25s;pointer-events:none}
   .toast.show{opacity:1}
 </style>
@@ -40,7 +45,7 @@
 <body>
 <div class="wrap">
   <h1>📊 B站签约作者监控</h1>
-  <div class="sub">无需登录 · 数据由 wbi 签名公开接口经中转抓取 · 纯前端不存任何数据</div>
+  <div class="sub">无需登录 · 数据由 wbi 签名公开接口经中转抓取 · 名册存本浏览器，可随时增删</div>
 
   <div class="tabs">
     <div class="tab on" data-tab="daily">📈 日常监控</div>
@@ -59,7 +64,7 @@
       <div style="margin-top:8px"><span class="cfg" id="cfgBtn">⚙️ 设置中转地址</span></div>
       <div class="row hide" id="cfgRow" style="margin-top:8px">
         <input id="api" style="flex:1;min-width:240px" placeholder="https://你的Worker.workers.dev">
-        <button class="btn" id="saveApi" style="padding:8px 14px;font-size:13px">保存</button>
+        <button class="btn sm" id="saveApi">保存</button>
       </div>
     </div>
     <div class="card hide" id="dailyResult">
@@ -71,12 +76,26 @@
 
   <!-- ===== 页2：投流提报 ===== -->
   <div id="page-report" class="hide">
+    <!-- 名册管理 -->
+    <div class="card">
+      <h3>👥 签约作者名册（存本浏览器，可增删）<span class="cfg" id="toggleRoster" style="float:right">展开/收起</span></h3>
+      <div id="rosterBox">
+        <div class="roster" id="rosterList"></div>
+        <div class="row" style="margin-top:10px">
+          <input id="addName" placeholder="昵称" style="width:140px">
+          <input id="addUid" placeholder="UID（纯数字）" style="width:160px">
+          <select id="addTier" style="padding:9px;border:1px solid var(--line);border-radius:8px"><option>高潜</option><option>头部</option></select>
+          <button class="btn sm" id="addBtn">+ 添加</button>
+          <button class="btn sm ghost" id="resetRoster">恢复默认 8 人</button>
+        </div>
+      </div>
+    </div>
     <div class="card">
       <div class="row">
         <button class="btn" id="run">抓取本周低播稿件</button>
         <span class="prog" id="rProg"></span>
       </div>
-      <div class="sub" style="margin-top:8px">扫描全部签约作者，窗口 = 上一个完整周（周日→周日），挑出低于该作者近 N 条均值的稿件，按投流申请表格式导出。</div>
+      <div class="sub" style="margin-top:8px">扫描名册全部作者，窗口 = 上一个完整周（周日→周日），挑出低于该作者近 N 条均值的稿件，按投流申请表格式导出。</div>
     </div>
     <div class="card hide" id="reportResult">
       <div class="stat" id="rStat"></div>
@@ -94,8 +113,8 @@
 <script>
   // 中转地址：部署 Worker 后改这行，或点页面「设置中转地址」临时填
   const DEFAULT_API = "PASTE_YOUR_WORKER_URL_HERE";
-  // 签约作者名册（新增/调整在此处改）
-  const SIGNED = [
+  // 名册默认值（首次打开自动写入本地，之后以本地为准、可增删）
+  const DEFAULT_ROSTER = [
     {name:"转生成为毛毛", uid:"1563385862", tier:"头部"},
     {name:"君在西安",     uid:"1202350411", tier:"头部"},
     {name:"肉仔肉仔肉",   uid:"3493116935932108", tier:"高潜"},
@@ -117,6 +136,28 @@
   function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1500);}
   function apiReady(){const a=getApi();return a && !a.includes('PASTE_YOUR');}
 
+  // ---- 名册（localStorage）----
+  function getRoster(){
+    const raw=localStorage.getItem('bili_roster');
+    if(!raw){ localStorage.setItem('bili_roster',JSON.stringify(DEFAULT_ROSTER)); return DEFAULT_ROSTER.slice(); }
+    try{ return JSON.parse(raw); }catch(e){ return DEFAULT_ROSTER.slice(); }
+  }
+  function saveRoster(r){ localStorage.setItem('bili_roster',JSON.stringify(r)); renderRoster(); }
+  function renderRoster(){
+    const r=getRoster();
+    $('rosterList').innerHTML = r.length ? r.map((u,i)=>`<div class="ritem"><span class="tier ${u.tier==='头部'?'t1':''}">${u.tier||'高潜'}</span><span class="rn">${esc(u.name)}</span><span class="ru">${u.uid}</span><span class="del" data-i="${i}">删除</span></div>`).join('') : '<div class="sub">名册为空，下面添加作者</div>';
+    $('rosterList').querySelectorAll('.del').forEach(el=>el.onclick=()=>{const r=getRoster();r.splice(+el.dataset.i,1);saveRoster(r);});
+  }
+  $('toggleRoster').onclick=()=>$('rosterBox').classList.toggle('hide');
+  $('addBtn').onclick=()=>{
+    const name=$('addName').value.trim(), uid=$('addUid').value.trim().replace(/\D/g,''), tier=$('addTier').value;
+    if(!name||!uid){toast('昵称和 UID 都要填');return;}
+    const r=getRoster();
+    if(r.some(x=>x.uid===uid)){toast('该 UID 已在名册');return;}
+    r.push({name,uid,tier}); saveRoster(r); $('addName').value='';$('addUid').value=''; toast('已添加');
+  };
+  $('resetRoster').onclick=()=>{ if(confirm('恢复成默认 8 人？当前增删会丢失')){ saveRoster(DEFAULT_ROSTER.slice()); toast('已恢复默认'); } };
+
   // tabs
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
@@ -128,10 +169,7 @@
   $('api').value=localStorage.getItem('bili_api')||'';
   $('saveApi').onclick=()=>{const v=$('api').value.trim();if(v){localStorage.setItem('bili_api',v);toast('已保存');$('cfgRow').classList.add('hide');}};
 
-  async function fetchUp(uid,n){
-    const r=await fetch(`${getApi()}/?mid=${uid}&n=${n}`);
-    return r.json();
-  }
+  async function fetchUp(uid,n){ const r=await fetch(`${getApi()}/?mid=${uid}&n=${n}`); return r.json(); }
 
   /* ---- 页1：日常监控 ---- */
   $('go').onclick=runDaily;
@@ -158,7 +196,6 @@
   }
 
   /* ---- 页2：投流提报 ---- */
-  // 上一个完整周：上周日 → 本周日（含两端）
   function weekWindow(){
     const now=new Date();now.setHours(0,0,0,0);
     const end=new Date(now);end.setDate(now.getDate()-now.getDay()); // 最近一个周日（今天若周日则今天）
@@ -170,12 +207,14 @@
   async function runReport(){
     $('rErr').textContent='';$('reportResult').classList.add('hide');
     if(!apiReady()){$('rErr').textContent='先到「日常监控」页点「⚙️ 设置中转地址」填入 Worker 网址';return;}
+    const roster=getRoster();
+    if(!roster.length){$('rErr').textContent='名册为空，先在上方添加作者';return;}
     const {start,end}=weekWindow();
     const inWin=t=>{const d=new Date(t*1000);d.setHours(0,0,0,0);return d>=start&&d<=end;};
     $('run').disabled=true;
     const rows=[];const today=fmtSlash(new Date());
-    for(let i=0;i<SIGNED.length;i++){
-      const u=SIGNED[i];$('rProg').textContent=`抓取中 ${i+1}/${SIGNED.length}：${u.name}`;
+    for(let i=0;i<roster.length;i++){
+      const u=roster[i];$('rProg').textContent=`抓取中 ${i+1}/${roster.length}：${u.name}`;
       try{
         const d=await fetchUp(u.uid,N);
         if(!d.error && d.list && d.list.length){
@@ -185,13 +224,13 @@
           });
         }
       }catch(e){/* 跳过单个失败 */}
-      await sleep(1500); // 防限频
+      await sleep(1500);
     }
     $('rProg').textContent='';$('run').disabled=false;
     const head=['提需日期','提需人','uid','昵称','投流稿件','申请原因','投流渠道','投流预算','备注','是否已投'];
     lastTSV=[head.join('\t'),...rows.map(r=>r.join('\t'))].join('\n');
     const ws=`${start.getMonth()+1}/${start.getDate()}`,we=`${end.getMonth()+1}/${end.getDate()}`;
-    $('rStat').innerHTML=`窗口 ${ws}→${we}（周日→周日），共 <b>${rows.length}</b> 条低播提报候选`;
+    $('rStat').innerHTML=`窗口 ${ws}→${we}（周日→周日），扫描 ${roster.length} 位作者，共 <b>${rows.length}</b> 条低播提报候选`;
     let h='<table><thead><tr>'+head.map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>';
     rows.forEach(r=>{h+='<tr>'+r.map((c,i)=>i===4?`<td><a href="https://www.bilibili.com/video/${c}" target="_blank">${c}</a></td>`:`<td>${esc(c)}</td>`).join('')+'</tr>';});
     $('rTable').innerHTML=h+'</tbody></table>';$('reportResult').classList.remove('hide');
@@ -201,6 +240,8 @@
     try{await navigator.clipboard.writeText(lastTSV);}catch(e){$('rTsv').textContent=lastTSV;$('rTsv').classList.remove('hide');}
     toast('已复制，去多维表格粘贴');
   };
+
+  renderRoster();
 </script>
 </body>
 </html>
