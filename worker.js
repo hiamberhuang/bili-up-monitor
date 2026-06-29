@@ -46,9 +46,27 @@ const md5 = (function () {
 
 const TAB=[46,47,18,2,53,8,23,32,15,50,10,31,58,3,45,35,27,43,5,49,33,9,42,19,29,28,14,39,12,38,41,13,37,48,7,16,24,55,40,61,26,17,0,1,60,51,30,4,22,25,54,21,56,59,6,63,57,62,11,36,20,34,44,52];
 
-async function getKeys(){
-  const r = await fetch('https://api.bilibili.com/x/web-interface/nav', {headers:{'User-Agent':UA}});
-  const d = await r.json();
+// 取设备指纹 buvid（无需登录），用于过风控
+async function getBuvid(){
+  try{
+    const r = await fetch('https://api.bilibili.com/x/frontend/finger/spi', {headers:{'User-Agent':UA}});
+    const d = await r.json();
+    return `buvid3=${d.data.b_3}; buvid4=${d.data.b_4}`;
+  }catch(e){ return 'buvid3=' + crypto.randomUUID().toUpperCase() + 'infoc'; }
+}
+function headers(cookie, ref){
+  return {
+    'User-Agent': UA,
+    'Accept': 'application/json, text/plain, */*',
+    'Referer': ref || 'https://www.bilibili.com',
+    'Origin': 'https://www.bilibili.com',
+    'Cookie': cookie || '',
+  };
+}
+async function getKeys(cookie){
+  const r = await fetch('https://api.bilibili.com/x/web-interface/nav', {headers: headers(cookie)});
+  const t = await r.text();
+  let d; try{ d = JSON.parse(t); }catch(e){ throw new Error('nav 被风控（返回非 JSON）'); }
   return {
     img: d.data.wbi_img.img_url.split('/').pop().split('.')[0],
     sub: d.data.wbi_img.sub_url.split('/').pop().split('.')[0],
@@ -82,12 +100,14 @@ export default {
     if (cached) return cached;
 
     try {
-      const k = await getKeys();
+      const cookie = await getBuvid();
+      const k = await getKeys(cookie);
       const qs = sign({mid, pn:1, ps:n, order:'pubdate', platform:'web', web_location:1550101}, k.img, k.sub);
       const up = await fetch(`https://api.bilibili.com/x/space/wbi/arc/search?${qs}`, {
-        headers: {'User-Agent': UA, 'Referer': `https://space.bilibili.com/${mid}/video`},
+        headers: headers(cookie, `https://space.bilibili.com/${mid}/video`),
       });
-      const d = await up.json();
+      const t = await up.text();
+      let d; try{ d = JSON.parse(t); }catch(e){ return json({error:'B站风控了中转 IP（返回非 JSON）。可稍后重试；持续失败需换取数方案'}); }
       if (d.code !== 0) return json({error: `B站返回 ${d.code}：${d.message}`, code: d.code});
       const vl = (d.data && d.data.list && d.data.list.vlist) || [];
       const resp = json({
