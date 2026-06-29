@@ -88,6 +88,11 @@
           <button class="btn sm" id="addBtn">+ 添加</button>
           <button class="btn sm ghost" id="resetRoster">恢复默认 8 人</button>
         </div>
+        <div class="row" style="margin-top:8px">
+          <input id="bulkUids" placeholder="批量导入：粘贴 UID，英文逗号分隔（如 123,456,789）" style="flex:1;min-width:280px">
+          <button class="btn sm" id="bulkBtn">⚡ 批量导入</button>
+        </div>
+        <div class="sub" id="bulkHint">批量导入会自动拉取每个 UID 的昵称（需先设好中转地址）。</div>
       </div>
     </div>
     <div class="card">
@@ -157,6 +162,20 @@
     r.push({name,uid,tier}); saveRoster(r); $('addName').value='';$('addUid').value=''; toast('已添加');
   };
   $('resetRoster').onclick=()=>{ if(confirm('恢复成默认 8 人？当前增删会丢失')){ saveRoster(DEFAULT_ROSTER.slice()); toast('已恢复默认'); } };
+  $('bulkBtn').onclick=async()=>{
+    const ids=[...new Set((($('bulkUids').value||'').match(/\d{3,}/g))||[])];
+    if(!ids.length){toast('没识别到 UID');return;}
+    const r=getRoster(); let added=0;
+    $('bulkBtn').disabled=true;
+    for(const uid of ids){
+      if(r.some(x=>x.uid===uid)) continue;
+      let name='UID'+uid;
+      if(apiReady()){ try{const d=await fetchUp(uid,1); if(d&&d.name) name=d.name;}catch(e){} await sleep(800); }
+      r.push({name,uid,tier:'高潜'}); added++;
+    }
+    saveRoster(r); $('bulkUids').value=''; $('bulkBtn').disabled=false;
+    toast(`已导入 ${added} 个`+(apiReady()?'':'（昵称待设好中转后重导自动补）'));
+  };
 
   // tabs
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
